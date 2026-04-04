@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔗 URL Shortener</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1.5rem;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    header h1 { font-size: 1.8rem; }
+    .container { max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+    .form-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+      margin-bottom: 1.5rem;
+    }
+    .input-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+    input[type="url"] {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    input[type="url"]:focus { outline: none; border-color: #667eea; }
+    .btn-primary {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+    .result {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f0fdf4;
+      border-radius: 8px;
+      display: none;
+    }
+    .result.show { display: block; }
+    .result a {
+      color: #667eea;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .error {
+      background: #fee;
+      color: #c33;
+      padding: 0.75rem;
+      border-radius: 8px;
+      margin-top: 1rem;
+      display: none;
+    }
+    .error.show { display: block; }
+    .urls-list {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .urls-list h2 {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #e0e0e0;
+      color: #333;
+      font-size: 1.2rem;
+    }
+    .url-item {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .url-item:last-child { border-bottom: none; }
+    .url-item a {
+      color: #667eea;
+      font-weight: 600;
+      word-break: break-all;
+    }
+    .url-item .original {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 0.25rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .url-item .meta {
+      color: #999;
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+    }
+    .empty {
+      padding: 2rem;
+      text-align: center;
+      color: #999;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔗 URL Shortener</h1>
+  </header>
+  <div class="container">
+    <div class="form-card">
+      <form id="shorten-form">
+        <div class="input-row">
+          <input type="url" id="url-input" placeholder="Paste long URL here..." required>
+          <button type="submit" class="btn-primary" id="submit-btn">Shorten</button>
+        </div>
+      </form>
+      <div class="result" id="result">
+        <strong>Short URL:</strong> <a id="short-url" href="#" target="_blank"></a>
+      </div>
+      <div class="error" id="error"></div>
+    </div>
+    <div class="urls-list">
+      <h2>Recent URLs</h2>
+      <div id="urls-container"></div>
+    </div>
+  </div>
+  <script>
+    const form = document.getElementById('shorten-form');
+    const urlInput = document.getElementById('url-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const resultDiv = document.getElementById('result');
+    const shortUrlLink = document.getElementById('short-url');
+    const errorDiv = document.getElementById('error');
+    const urlsContainer = document.getElementById('urls-container');
+
+    async function fetchUrls() {
+      try {
+        const res = await fetch('/api/urls');
+        const urls = await res.json();
+        if (urls.length === 0) {
+          urlsContainer.innerHTML = '<div class="empty">No URLs created yet. Paste a link above!</div>';
+          return;
+        }
+        urlsContainer.innerHTML = urls.map(u => `
+          <div class="url-item">
+            <a href="${u.shortUrl}" target="_blank">${u.shortUrl}</a>
+            <div class="original">${u.originalUrl}</div>
+            <div class="meta">${u.clicks} clicks • ${new Date(u.createdAt).toLocaleDateString()}</div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('Failed to fetch URLs:', err);
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '...';
+      errorDiv.classList.remove('show');
+      resultDiv.classList.remove('show');
+
+      try {
+        const res = await fetch('/api/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to shorten URL');
+        }
+
+        shortUrlLink.textContent = data.shortUrl;
+        shortUrlLink.href = data.shortUrl;
+        resultDiv.classList.add('show');
+        urlInput.value = '';
+        await fetchUrls();
+      } catch (err) {
+        errorDiv.textContent = err.message;
+        errorDiv.classList.add('show');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Shorten';
+      }
+    });
+
+    // Load URLs on page load
+    fetchUrls();
+  </script>
+</body>
+</html>
