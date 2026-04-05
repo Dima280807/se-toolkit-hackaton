@@ -10,6 +10,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/migrations/001_urls.sql:/docker-entrypoint-initdb.d/001_urls.sql
+      - ./backend/migrations/002_custom_codes_and_expiration.sql:/docker-entrypoint-initdb.d/002_custom_codes_and_expiration.sql
+      - ./backend/migrations/003_fix_short_code_length.sql:/docker-entrypoint-initdb.d/003_fix_short_code_length.sql
 
   backend:
     build: ./backend
@@ -22,6 +24,7 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       BASE_URL: http://localhost:5000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       - db
 
