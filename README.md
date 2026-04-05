@@ -32,7 +32,7 @@ A smart URL shortener that automatically describes and tags your links using AI,
 
 ## Demo
 
-![Smart URL Shortener](https://via.placeholder.com/800x450/667eea/ffffff?text=Smart+URL+Shortener+Screenshot)
+![Smart URL Shortener](docs/screenshot.png)
 
 *Main interface with AI-powered link creation and analytics*
 
