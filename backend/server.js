@@ -10,9 +10,6 @@ const PORT = process.env.PORT || 5000;
 
 // Helper to get the actual base URL from the request
 const getBaseUrl = (req) => {
-  // If BASE_URL is explicitly set, use it
-  if (process.env.BASE_URL) return process.env.BASE_URL;
-  // Otherwise, detect from the actual request
   return `${req.protocol}://${req.get('host')}`;
 };
 
