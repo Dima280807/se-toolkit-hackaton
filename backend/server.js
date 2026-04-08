@@ -7,7 +7,14 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const BASE_URL = process.env.BASE_URL || 'http://localhost:5000';
+
+// Helper to get the actual base URL from the request
+const getBaseUrl = (req) => {
+  // If BASE_URL is explicitly set, use it
+  if (process.env.BASE_URL) return process.env.BASE_URL;
+  // Otherwise, detect from the actual request
+  return `${req.protocol}://${req.get('host')}`;
+};
 
 // Middleware
 app.use(cors());
@@ -76,7 +83,7 @@ app.post('/api/shorten', async (req, res) => {
     );
 
     const entry = result.rows[0];
-    const shortUrl = `${BASE_URL}/${entry.short_code}`;
+    const shortUrl = `${getBaseUrl(req)}/${entry.short_code}`;
 
     res.status(201).json({
       shortUrl,
@@ -102,7 +109,7 @@ app.get('/api/urls', async (req, res) => {
 
     const urls = result.rows.map(row => ({
       id: row.id,
-      shortUrl: `${BASE_URL}/${row.short_code}`,
+      shortUrl: `${getBaseUrl(req)}/${row.short_code}`,
       originalUrl: row.original_url,
       description: row.description,
       tags: row.tags || [],
@@ -127,9 +134,9 @@ app.get('/api/search', async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, short_code, original_url, description, tags, clicks, created_at 
-       FROM urls 
-       WHERE LOWER(description) LIKE LOWER($1) 
+      `SELECT id, short_code, original_url, description, tags, clicks, created_at
+       FROM urls
+       WHERE LOWER(description) LIKE LOWER($1)
           OR LOWER(original_url) LIKE LOWER($1)
           OR $1 = ANY(tags)
        ORDER BY created_at DESC`,
@@ -138,7 +145,7 @@ app.get('/api/search', async (req, res) => {
 
     const urls = result.rows.map(row => ({
       id: row.id,
-      shortUrl: `${BASE_URL}/${row.short_code}`,
+      shortUrl: `${getBaseUrl(req)}/${row.short_code}`,
       originalUrl: row.original_url,
       description: row.description,
       tags: row.tags || [],
@@ -157,11 +164,17 @@ app.get('/api/search', async (req, res) => {
 app.get('/:code', async (req, res) => {
   try {
     const { code } = req.params;
+    console.log(`[Redirect] Looking for short code: "${code}"`);
 
     const result = await pool.query(
       'SELECT id, original_url, expires_at FROM urls WHERE short_code = $1',
       [code]
     );
+
+    console.log(`[Redirect] Query result for "${code}": ${result.rows.length} rows found`);
+    if (result.rows.length > 0) {
+      console.log(`[Redirect] Original URL: ${result.rows[0].original_url}`);
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).send(`
@@ -195,18 +208,23 @@ app.get('/:code', async (req, res) => {
     // Log click event for analytics
     const ip = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('User-Agent');
+    console.log(`[Redirect] Logging click: url_id=${urlData.id}, ip=${ip}`);
     await pool.query(
       'INSERT INTO click_events (url_id, ip_address, user_agent) VALUES ($1, $2, $3)',
       [urlData.id, ip, userAgent]
     );
+    console.log(`[Redirect] Click event logged for "${code}"`);
 
     // Increment click count
     await pool.query('UPDATE urls SET clicks = clicks + 1 WHERE id = $1', [urlData.id]);
+    console.log(`[Redirect] Click count incremented for "${code}"`);
 
     // Redirect
+    console.log(`[Redirect] Redirecting to: ${urlData.original_url}`);
     res.redirect(urlData.original_url);
   } catch (error) {
-    console.error('Redirect error:', error);
+    console.error(`[Redirect] ERROR for code "${req.params.code}":`, error.message);
+    console.error(`[Redirect] Full error:`, error);
     res.status(500).send('Internal server error');
   }
 });
@@ -251,7 +269,7 @@ app.get('/api/analytics/:code', async (req, res) => {
 
     res.json({
       url: {
-        shortUrl: `${BASE_URL}/${urlData.short_code}`,
+        shortUrl: `${getBaseUrl(req)}/${urlData.short_code}`,
         originalUrl: urlData.original_url,
         description: urlData.description,
         tags: urlData.tags || [],
@@ -292,7 +310,7 @@ app.get('/api/analytics', async (req, res) => {
     res.json({
       totalClicks: parseInt(totalClicks.rows[0].total) || 0,
       topUrls: topUrls.rows.map(row => ({
-        shortUrl: `${BASE_URL}/${row.short_code}`,
+        shortUrl: `${getBaseUrl(req)}/${row.short_code}`,
         originalUrl: row.original_url,
         description: row.description,
         tags: row.tags || [],
