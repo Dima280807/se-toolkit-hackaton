@@ -326,7 +326,8 @@ app.delete('/api/urls/:id', async (req, res) => {
 });
 
 // Serve frontend
-app.use(express.static('/app/public'));
+const path = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Error handling
 app.use((err, req, res, next) => {
